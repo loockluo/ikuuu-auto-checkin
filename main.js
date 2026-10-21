@@ -8,16 +8,35 @@ const checkInUrl = `https://${host}/user/checkin`;
 async function checkIn(account) {
   const response = await fetch(checkInUrl, {
     method: "POST",
+    redirect: "manual",
+    signal: AbortSignal.timeout(30000),
     headers: {
       Cookie: account.cookie,
+      Accept: "application/json",
+      "X-Requested-With": "XMLHttpRequest",
+      Origin: `https://${host}`,
+      Referer: `https://${host}/user`,
     },
   });
+
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error("Cookie 已失效或未被站点接受，接口重定向；请重新登录并更新 ACCOUNTS。");
+  }
 
   if (!response.ok) {
     throw new Error(`网络请求出错 - ${response.status}`);
   }
 
-  const data = await response.json();
+  const body = await response.text();
+  let data;
+  try {
+    data = JSON.parse(body);
+  } catch {
+    throw new Error("签到接口返回 HTML 或其他非 JSON 内容，可能是登录页或站点验证页面。");
+  }
+  if (!data || typeof data.msg !== "string") {
+    throw new Error("签到接口响应格式已变化，缺少结果消息。");
+  }
   console.log(`${account.name}: ${data.msg}`);
 
   return data.msg;
